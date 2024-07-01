@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 // Kafka
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.serialization.StringSerializer;
 
@@ -36,6 +37,16 @@ public class WikimediaChangesProducer {
         // setting the producer specific properties - both props below serialize the keys and values using an official Kafka class
         properties.setProperty("key.serializer", StringSerializer.class.getName());
         properties.setProperty("value.serializer", StringSerializer.class.getName());
+
+        // safe producer config
+        properties.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        properties.setProperty(ProducerConfig.ACKS_CONFIG, "all"); // same as "-1"
+        properties.setProperty(ProducerConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE));
+
+        // high throughput producer configs
+        properties.setProperty(ProducerConfig.LINGER_MS_CONFIG, "20");
+        properties.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, Integer.toString(32 * 1024));
+        properties.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy");
 
         // # -- create the Producer
         KafkaProducer<String, String> producer = new KafkaProducer<>(properties);

@@ -15,7 +15,7 @@ pd() {
 
 cm() {
   echo "### Consuming.."
-  java -cp target/kafka-producer-1.0-SNAPSHOT.jar kafka.wikimedia.ConsumerCoop
+  java -cp target/kafka-consumer-opensearch-1.0-SNAPSHOT.jar kafka.opensearch.ConsumerCoop
 }
 
 
