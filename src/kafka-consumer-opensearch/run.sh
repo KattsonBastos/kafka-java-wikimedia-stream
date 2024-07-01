@@ -15,7 +15,7 @@ pd() {
 
 cm() {
   echo "### Consuming.."
-  java -cp target/kafka-consumer-opensearch-1.0-SNAPSHOT.jar kafka.opensearch.OpenSearchConsumer
+  java -cp target/kafka-consumer-opensearch-1.0-SNAPSHOT.jar kafka.opensearch.OpenSearchConsumerBulk
 }
 
 

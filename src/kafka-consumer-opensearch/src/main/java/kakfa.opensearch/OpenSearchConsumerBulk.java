@@ -46,7 +46,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 
-public class OpenSearchConsumer {
+public class OpenSearchConsumerBulk {
 
     // rest high level client
     public static RestHighLevelClient createOpenSearchClient() {
@@ -113,7 +113,7 @@ public class OpenSearchConsumer {
         String osIndexName = "wikimedia";
         String topic = "src-java-wikimedia-recentchange";
 
-        Logger log = LoggerFactory.getLogger(OpenSearchConsumer.class.getSimpleName());
+        Logger log = LoggerFactory.getLogger(OpenSearchConsumerBulk.class.getSimpleName());
         log.info("Consumer Started");
 
 
@@ -122,6 +122,25 @@ public class OpenSearchConsumer {
 
         // # -- create Kafka client
         KafkaConsumer<String, String> consumer = createKafkaConsumer();
+
+
+        // get a reference to the main thread
+        final Thread mainThread = Thread.currentThread();
+
+        // adding the shutdown hook
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            public void run() {
+                log.info("Detected a shutdown, let's exit by calling consumer.wakeup()...");
+                consumer.wakeup();
+
+                // join the main thread to allow the execution of the code in the main thread
+                try {
+                    mainThread.join();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
 
         // create the index on OpenSearch if don't exists
         try (openSearchClient; consumer) { // this try already clsoe the openSearchClient so we don't need the openSearchClient.close()
@@ -147,6 +166,8 @@ public class OpenSearchConsumer {
 
                 log.info("Received "+ recordCount + " record(s).");
 
+                BulkRequest bulkRequest = new BulkRequest();
+
                 // sending records into opensearch
                 for (ConsumerRecord<String, String> record : records) {
 
@@ -158,18 +179,40 @@ public class OpenSearchConsumer {
                             .source(record.value(), XContentType.JSON)
                             .id(recordId);
 
-                        IndexResponse response = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
+                        // IndexResponse response = openSearchClient.index(indexRequest, RequestOptions.DEFAULT);
+
+                        bulkRequest.add(indexRequest); // filling the bulkRequest
 
                         // log.info(response.getId());
                     } catch (Exception e) {
+
                     }
                 }
 
-                // committing offsets after batch is consumed
-                consumer.commitSync();
-                log.info(recordCount + " offsets committed!");
-            }
-        }
+                if (bulkRequest.numberOfActions() > 0) {
+                    BulkResponse bulkResponse = openSearchClient.bulk(bulkRequest, RequestOptions.DEFAULT);
+                    log.info("Inserted " + bulkResponse.getItems().length + " records");
 
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+                    // committing offsets after batch is consumed
+                    consumer.commitSync();
+                    log.info(recordCount + " offsets committed!");
+                }
+            }
+
+        } catch (WakeupException e) {
+            log.info("Consumer is starting to shut down");
+        } catch (Exception e) {
+            log.error("Unexpected exception in the consumer", e);
+        } finally {
+            consumer.close(); // close the consumer, this will also commit offsets
+            openSearchClient.close();
+            log.info("The consumer is now gracefully shut down");
+        }
     }
 }
